@@ -1,0 +1,32 @@
+# Build artifacts
+build/
+*.o
+*.obj
+*.exe
+*.out
+*.a
+*.so
+*.dll
+
+# Assembly listings
+*.lst
+
+# GTest build artifacts (if building from source)
+googletest/
+gtest/
+
+# CMake or Make intermediate files
+CMakeFiles/
+CMakeCache.txt
+Makefile
+cmake_install.cmake
+
+# VS Code & CLion
+.vscode/
+.idea/
+
+# Misc
+*.log
+*.swp
+*.swo
+
