@@ -1,12 +1,6 @@
-// Example file only
 #include <gtest/gtest.h>
+#include "asm_test_helper.h"
 #include <cstdint>
-
-// Forward declaration from main.cpp
-class AsmTestHelper {
-public:
-    static void logTestInfo(const std::string& message);
-};
 
 // Simple inline assembly test (x86-64)
 TEST(AssemblyTest, BasicInlineAssembly) {
