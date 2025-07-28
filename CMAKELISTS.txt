@@ -4,6 +4,9 @@ project(gtest-x86)
 # Gtest requires atleast C++17
 set(CMAKE_CXX_STANDARD 20)
 
+# Enable Assembly language
+enable_language(ASM)
+
 # Add compiler flags for debugging
 set(CMAKE_CXX_FLAGS_DEBUG "-g -O0 -Wall -Wextra")
 
@@ -43,7 +46,7 @@ target_link_libraries(
 
 # Discover tests
 include(GoogleTest)
-gtest_discover_tests(emulator_tests)
+gtest_discover_tests(asm_tests)
 
 # Add coverage support for Debug builds
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -61,12 +64,12 @@ else()
 endif()
 
 # Add version information
-set(PROJECT_VERSION_MAJOR 1)
-set(PROJECT_VERSION_MINOR 0)
-set(PROJECT_VERSION_PATCH 0)
-configure_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/version.h.in"
-    "${CMAKE_CURRENT_BINARY_DIR}/src/version.h"
-)
-target_include_directories(s_lib PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/src")
+#set(PROJECT_VERSION_MAJOR 1)
+#set(PROJECT_VERSION_MINOR 0)
+#set(PROJECT_VERSION_PATCH 0)
+#configure_file(
+#    "${CMAKE_CURRENT_SOURCE_DIR}/src/version.h.in"
+#    "${CMAKE_CURRENT_BINARY_DIR}/src/version.h"
+#)
+#target_include_directories(s_lib PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/src")
 
