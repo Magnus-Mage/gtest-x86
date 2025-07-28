@@ -1,18 +1,6 @@
-// Example file only
-
 #include <gtest/gtest.h>
+#include "asm_test_helper.h"
 #include <iostream>
-
-// Forward declarations from main.cpp
-class AsmTestHelper {
-public:
-    static std::string getLibraryName();
-    static bool isLibraryWorking();
-    static int addTwoNumbers(int a, int b);
-    static void logTestInfo(const std::string& message);
-};
-
-extern "C" int test_library_function();
 
 // Basic test to verify gtest is working
 TEST(BasicTest, GoogleTestIsWorking) {
