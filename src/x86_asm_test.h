@@ -1,29 +1,47 @@
-#ifndef X86_ASM_TEST_H_
-#define X86_ASM_TEST_H_
+#pragma once
 
 #include <gtest/gtest.h>
 #include <string>
 #include <vector>
-#include <map>
+#include <concepts>
 #include <memory>
 #include <chrono>
-#include <sstream>
-#include <fstream>
+#include <optional>
+#include <span>
 #include <cstdint>
 #include <type_traits>
-#include <functional>
-#include <random>
-#include <limits>
+#include <format>
 
 namespace x86_asm_test 
 {
 	
+
 	/**
 	 * @brief Forward Declarations; to get the pointer to the class
 	 */
 	class ExecutableRunner;
 	class ProcessResult;
 	class InputProvider;
+
+	/**
+	 * @brief Type safety and better error messages
+	 */
+	template<typename T>
+        concept StringLike = std::convertible_to<T, std::string_view>;
+	
+	template<typename T>
+	concept Arithmetic = std::is_arithmetic_v<T>;
+
+	template<typename T>
+	concept Arithmetic = std::is_arithmeric_v<T>;
+
+	template<typename T>
+	concept Container = requires(T t) 
+	{
+		t.begin();
+		t.end();
+		typename T::value_type;
+	};
 
 	/**
 	 * @brief Enum for assembly syntax types
@@ -35,63 +53,30 @@ namespace x86_asm_test
 	};
 
 	/**
-	 * @brief ENUM for input/output datatypes (deprecated)
+	 * @brief  Process execution result with log info
 	 */
-	enum class DataType 
+       	struct ExecutionResult 
 	{
-		INT8,
-		INT16,
-		INT32,
-		INT64,
-		UINT8,
-		UINT16,
-		UINT32,
-		UINT64,
-		FLOAT,
-		DOUBLE,
-		STRING,
-		BINARY
-	};
+		int exit_code{0};
+		std::string stdout_output;
+		std::string stderr_output;
+		std::chrono::milliseconds execution_time{0};
+		bool timed_out{false};
 
-	/**
-	 * @brief Type traits for compile-time information
-	 */
-
-	template<typename T>
-	struct TypeInfo {
-		static constexpr const char* name() 
+		[[nodiscard]] constexpr bool succeeded() const noexcept 
 		{
-			if      constexpr (std::is_same_v<T, int8_t>)      return "int8" ;
-			else if constexpr (std::is_same_v<T, int8_t>)      return "int8" ;
-			else if constexpr (std::is_same_v<T, int16_t>)     return "int16";
-			else if constexpr (std::is_same_v<T, int32_t>)     return "int32";
-			else if constexpr (std::is_same_v<T, int64_t>)     return "int64";
-			else if constexpr (std::is_same_v<T, uint8_t>)     return "uint8";
-			else if constexpr (std::is_same_v<T, uint16_t>)    return "uint16";
-			else if constexpr (std::is_same_v<T, uint32_t>)    return "uint32";
-			else if constexpr (std::is_same_v<T, uint64_t>)    return "uint64";
-			else if constexpr (std::is_same_v<T, float>)       return "float" ;
-			else if constexpr (std::is_same_v<T, double>)      return "double";
-			else if constexpr (std::is_same_v<T, std::string>) return "string";
-			else						   return "binary";
+			return exit_code == 0 && !timed_out;
 		}
 
-		static constexpr size_t size() 
-	};
+		[[nodiscard]] bool has_output() const noexcept 
+		{
+			return !stdout_output.empty();
+		}
+	};	
 
-	struct TestInput {
-		Datatype type;
-		std::vector<uint8_t> data;
-		std::string description;
 
-		TestInput(DataType t, const std::vector<uint_8>& d, const std::string& desc = "")
-			: type(t), data(d), description(desc) {}
 
-		/**
-		 * @brief constructors for different types
-		 */ 
-		static TestInput fromInt32(int_32_t value, const std::string& desc = "");
-	};
+
 
 
 }
