@@ -309,5 +309,31 @@ namespace x86_asm_test
 
 	};
 
+        // Utility macros for common test patterns
+#define ASM_EXPECT_OUTPUT(runner, input, expected) \
+    do { \
+        ASSERT_NE(runner, nullptr) << "Runner not initialized"; \
+        EXPECT_NO_THROW((runner)->assert_output(input, expected)); \
+    } while(0)
+
+#define ASM_ASSERT_OUTPUT(runner, input, expected) \
+    do { \
+        ASSERT_NE(runner, nullptr) << "Runner not initialized"; \
+        ASSERT_NO_THROW((runner)->assert_output(input, expected)); \
+    } while(0)
+
+// Factory functions for common use cases
+[[nodiscard]] inline TestInput make_input() {
+    return TestInput{};
+}
+
+[[nodiscard]] inline ExpectedOutput expect_success() {
+    return ExpectedOutput{}.exit_code(0);
+}
+
+[[nodiscard]] inline ExpectedOutput expect_failure(int code = 1) {
+    return ExpectedOutput{}.exit_code(code);
+}
+        
 
 }
