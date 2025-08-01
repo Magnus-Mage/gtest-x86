@@ -216,5 +216,69 @@ namespace x86_asm_test
 	 * @brief Main testing class with RAII design pattern for proper resource management
 	 */
 	
+	class AsmTestRunner
+	{
+	private:
+		std::filesystem::path executable_path_;
+		AsmSyntax syntax_;
+		TestConfig config_;
+		
+		// Private helper for process execution
+		[[nodiscard]] ExecutionResult execute_process(
+			const std::vector<std::string>& args,
+			const std::optional<std::string>& stdin_data = std::nullopt
+			) const;
+
+		// Strace integration for debugging
+		[[nodiscard]] ExecutionResult execute_with_strace(
+				const std::vector<std::string>& args,
+				const std::optional<std::string>& stdin_data = std::nullopt
+				) const;
+		
+	public:
+		// constructor for path verification
+		explicit AsmTestRunner(
+				std::filesystem::path executable_path,
+				AsmSyntax syntax = AsmSyntax::Intel,
+				TestConfig config = {}
+				);
+
+		// Delete copy operations to prevent copying big objects
+		AsmTestRunner(const AsmTestRunner&) = delete;
+		AsmTestRunner& operator=(const AsmTestRunner&) = delete;
+
+		// Move constructors for efficiency
+		AsmTestRunner(AsmTestRunner&&) noexcept = default;i
+		AsmTestRunner& operator=(AsmTestRunner&&) noexcept = default;
+
+		~AsmTestRunner() = default;
+
+		// Main test execution method
+		[[nodiscard]] ExectutionResult run_test(const TestInput& input) const;
+		
+
+		// Convience method that combines execution and assertion
+		void assert_output(const TestInput& input, const ExpectedOutput& expected) const;
+
+		// Config getters/setters
+		[[nodiscard]] const TestConfig& config() const noexcept { return config_; }
+		void set_config(TestConfig new_config) noexcept { config_ = std::move(new_config); }
+
+		[[nodiscard]] AsmSyntax syntax() const noexcept { return syntax_; }
+		void set_syntax(AsmSyntax new_syntax) noexcept { syntax_ = new_syntax; }
+
+		[[nodiscard]] const std::filesystem::path& executable_path() const noexcept { return executable_path_; }
+		
+		// Utility Mehtods
+		[[nodiscard]] bool executable_exists() const noexcept;
+		[[nodiscard]] std::string get_syntax_string() const noexcept;
+
+	};
+
+	/**
+	 * @brief RAII test fixture for Google test integration
+	 */
+	
+
 
 }
