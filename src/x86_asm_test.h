@@ -278,7 +278,36 @@ namespace x86_asm_test
 	/**
 	 * @brief RAII test fixture for Google test integration
 	 */
-	
+	class AsmTestFixture : public ::testing::Test
+	{
+	protected:
+		std::unique_ptr<AsmTestRunner> runner_;
+
+		void SetUp() override
+		{
+			// Override in derived classes to set up a runner
+		}
+
+		void TearDown() override
+		{
+			// Cleanup
+			runner_.reset();
+		}
+
+	public:
+		// Factory method for creating runners - just testing something i saw
+		template<typename... Args>
+		void create_runner(Args&&... args)
+		{
+			runner_ = std::make_unique<AsmTestRunner>(std::forward<Args>(args)...);
+		}
+
+		[[nodiscard]] AsmTestRunner* get_runner() const noexcept
+		{
+			return runner_.get();
+		}
+
+	};
 
 
 }
