@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <type_traits>
 #include <format>
+#include <ranges>
 
 namespace x86_asm_test 
 {
@@ -32,10 +33,7 @@ namespace x86_asm_test
 	template<typename T>
 	concept Arithmetic = std::is_arithmetic_v<T>;
 
-	template<typename T>
-	concept Arithmetic = std::is_arithmeric_v<T>;
-
-	template<typename T>
+	template<typename T>					// (Decrepted)
 	concept Container = requires(T t) 
 	{
 		t.begin();
@@ -46,7 +44,7 @@ namespace x86_asm_test
 	/**
 	 * @brief Enum for assembly syntax types
 	 */
-	enum class AssemblySyntax 
+	enum class AssemblySyntax : uint8_t
 	{
 		INTEL,
 		ATT
@@ -116,40 +114,19 @@ namespace x86_asm_test
 		 */
 		template<Arithmetic T>
 		TestInput& add_arg(T value)
-		{
-			if constexpr (std::is_floating_point_v<T>)
-			{
-				args_.emplace_back(std::format("{}", value));
-			}
-			else
-			{
-				args_.emplace_back(std::to_string(value));
-			}
+		{	
+			args_.emplace_back(std::format("{}", value));	
 			return *this;
 		}
 
 		/**
 		 * @brief Add multiple arguments from container
-		 * @param Expects an array or container
+		 * @param Expects any container; no need for seperate container overloads
 		 */
-		template<Container C>
-		TestInput& add_args(const C& container)
+		template<std::ranges::input_range R>
+		TestInput& add_args(R&& range)
 		{
-			for (const auto& item : container)
-			{
-				add_arg(item);
-			}
-			return *this;
-		}
-
-		/**
-		 * @brief Add arguments from span
-		 * @param Expects a std::span from C++ 20
-		 */
-		template<typename T>
-		TestInput& add_args(std::span<const T> items)
-		{
-			for ( const auto& item : items)
+			for (const auto& item : range)
 			{
 				add_arg(item);
 			}
@@ -167,7 +144,7 @@ namespace x86_asm_test
 			return *this;
 		}
 
-		[[nodiscard]] const std::vector<std::string>& args() const noexcept { return args_; }
+		[[nodiscard]] const std::span<const std::string>& args() const noexcept { return args_; }
 		[[nodiscard]] const std::optional<std::string>& stdin_data() const noexcept { return stdin_data_; }
 		
 
@@ -178,5 +155,66 @@ namespace x86_asm_test
 		[[nodiscard]] size_t size() const noexcept { return args_.size(); }
 
 	};
+	
+	/**
+	 * @brief Expected output matcher
+	 */
+	class ExpectedOuput 
+	{
+	private:
+		std::optional<std::string> 	exact_stdout_;
+		std::optional<std::string>	exact_stderr_;
+		std::vector<std::string>	stdout_contains_;
+		std::vector<std::string>	stderr_contains_;
+		std::optional<int>		expected_exit_code_;
+
+	public:
+		ExpectedOuput() = default;
+
+		// Exact String Matcher
+		template<StringLike T>
+		ExpectedOutput& stdout_equals(T&& expected)
+		{
+			exact_stdout_ = std::forward<T>(expected);
+			return *this;
+		}
+
+		template<StringLike T>
+		ExpectedOuput& stderr_equals(T&& expected)
+		{
+			exact_stderr_ = std::forward<T>(expected);
+			return *this;
+		}
+
+		// Partial matching for asm flexibility
+		template<StringLike T>
+		ExpectedOutput& stdout_contains(T&& pattern)
+		{
+			stdout_contains_.emplace_back(std::forward<T>(pattern));
+			return *this;
+		}
+
+		template<StringLike T>
+		ExpectedOutput& stderr_contains(T&& pattern)
+		{
+			stderr_contains_.emplace_back(std::forward<T>(pattern));
+			return *this;
+		}
+
+		ExpectedOutput& exit_code(int code) noexcept
+		{
+			expected_exit_code_ = code;
+			return *this;
+		}
+
+		// Internal validation method
+		[[nodiscard]] bool matches(const ExecutionResult& result) const noexcept;
+		[[nodiscard]] std::string get_mismatch_description(const ExecutionResult& result) const;
+	};
+
+	/**
+	 * @brief Main testing class with RAII design pattern for proper resource management
+	 */
+	
 
 }
