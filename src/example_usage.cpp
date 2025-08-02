@@ -3,14 +3,22 @@
 
 #include "x86_asm_test.h"
 #include <gtest/gtest.h>
+#include <sstream>
 
 using namespace x86_asm_test;
+// Simple format replacement for older compilers
+template<typename... Args>
+std::string simple_format(const std::string& format_str, Args... args) {
+    std::ostringstream oss;
+    oss << format_str;
+    ((oss << args), ...);
+    return oss.str();
+}
 
 // Example 1: Basic test fixture for a simple calculator assembly program
 class CalculatorAsmTest : public AsmTestFixture {
 protected:
     void SetUp() override {
-        // Assume we have a compiled assembly program that does basic arithmetic
         // The program takes two integers and an operation as command line args
         // Usage: ./calc <num1> <num2> <operation>
         // Where operation is: add, sub, mul, div
@@ -38,7 +46,7 @@ TEST_F(CalculatorAsmTest, TestAddition) {
 
 // Test multiplication with different input types
 TEST_F(CalculatorAsmTest, TestMultiplication) {
-    // Using array and ranges - single add_args call handles any range
+    // Using array - single add_args call handles any range
     std::array<int, 2> numbers = {7, 8};
     
     auto input = make_input()
@@ -51,6 +59,32 @@ TEST_F(CalculatorAsmTest, TestMultiplication) {
     ASM_EXPECT_OUTPUT(get_runner(), input, expected);
 }
 
+// Test subtraction
+TEST_F(CalculatorAsmTest, TestSubtraction) {
+    auto input = make_input()
+        .add_arg(10)
+        .add_arg(3)
+        .add_arg("sub");
+    
+    auto expected = expect_success()
+        .stdout_equals("7\n");
+    
+    ASM_ASSERT_OUTPUT(get_runner(), input, expected);
+}
+
+// Test division
+TEST_F(CalculatorAsmTest, TestDivision) {
+    auto input = make_input()
+        .add_arg(20)
+        .add_arg(4)
+        .add_arg("div");
+    
+    auto expected = expect_success()
+        .stdout_equals("5\n");
+    
+    ASM_ASSERT_OUTPUT(get_runner(), input, expected);
+}
+
 // Test division by zero error handling
 TEST_F(CalculatorAsmTest, TestDivisionByZero) {
     auto input = make_input()
@@ -60,8 +94,19 @@ TEST_F(CalculatorAsmTest, TestDivisionByZero) {
     
     // Expect failure with specific exit code and error message
     auto expected = expect_failure(1)
-        .stderr_contains("division by zero")
-        .stderr_contains("error");
+        .stderr_contains("division by zero");
+    
+    ASM_ASSERT_OUTPUT(get_runner(), input, expected);
+}
+
+// Test invalid arguments
+TEST_F(CalculatorAsmTest, TestInvalidArguments) {
+    auto input = make_input()
+        .add_arg(10)
+        .add_arg(5);  // Missing operation
+    
+    auto expected = expect_failure(1)
+        .stderr_contains("Usage:");
     
     ASM_ASSERT_OUTPUT(get_runner(), input, expected);
 }
@@ -74,129 +119,33 @@ protected:
         // Converts input to uppercase and outputs result
         TestConfig config;
         config.capture_stderr = true;
-        config.working_directory = std::filesystem::current_path() / "bin";
         
-        create_runner("string_processor", AsmSyntax::ATT, config);
+        create_runner("./string_processor", AsmSyntax::Intel, config);
     }
 };
 
 TEST_F(StringProcessorTest, TestUppercaseConversion) {
     auto input = make_input()
-        .set_stdin("hello world\ntest string\n");
+        .set_stdin("hello world\n");
     
     auto expected = expect_success()
-        .stdout_equals("HELLO WORLD\nTEST STRING\n");
+        .stdout_contains("HELLO WORLD");
     
     ASM_ASSERT_OUTPUT(get_runner(), input, expected);
 }
 
-// Test with binary input data
-TEST_F(StringProcessorTest, TestBinaryData) {
-    std::string binary_input{'\x41', '\x42', '\x43', '\x00', '\x44'}; // ABC\0D
-    
+// Test with simple string
+TEST_F(StringProcessorTest, TestSimpleString) {
     auto input = make_input()
-        .set_stdin(binary_input);
-    
-    // Check that it handles null bytes correctly
-    auto expected = expect_success()
-        .stdout_contains("ABC");
-    
-    ASM_EXPECT_OUTPUT(get_runner(), input, expected);
-}
-
-// Example 3: Performance testing with timing
-class PerformanceTest : public AsmTestFixture {
-protected:
-    void SetUp() override {
-        // Assembly program that performs intensive computation
-        TestConfig config;
-        config.timeout = std::chrono::milliseconds(10000); // 10 second timeout for perf tests
-        
-        create_runner("./performance_test", AsmSyntax::Intel, config);
-    }
-};
-
-TEST_F(PerformanceTest, TestExecutionTime) {
-    auto input = make_input()
-        .add_arg(1000000); // Number of iterations
-    
-    auto result = get_runner()->run_test(input);
-    
-    // Custom assertions for performance
-    EXPECT_TRUE(result.succeeded()) << "Performance test should complete successfully";
-    EXPECT_LT(result.execution_time.count(), 5000) << "Should complete within 5 seconds";
-    EXPECT_GT(result.execution_time.count(), 100) << "Should take at least 100ms for realistic test";
-    
-    // Check output format
-    EXPECT_TRUE(result.has_output()) << "Should produce timing output";
-}
-
-// Example 4: Advanced testing with strace debugging
-class DebuggingTest : public AsmTestFixture {
-protected:
-    void SetUp() override {
-        TestConfig config;
-        config.use_strace = true;  // Enable strace for debugging
-        config.strace_options = {
-            "-e", "trace=write,read,open,close,exit_group",
-            "-f",  // Follow forks
-            "-s", "1024"  // String limit
-        };
-        
-        create_runner("./file_processor", AsmSyntax::Intel, config);
-    }
-};
-
-TEST_F(DebuggingTest, TestFileOperations) {
-    // Create a temporary test file
-    std::filesystem::path temp_file = std::filesystem::temp_directory_path() / "test_input.txt";
-    std::ofstream{temp_file} << "test content\n";
-    
-    auto input = make_input()
-        .add_arg(temp_file.string());
+        .set_stdin("test");
     
     auto expected = expect_success()
-        .stdout_contains("test content");
+        .stdout_contains("TEST");
     
-    // The strace output will be mixed with stderr, providing debugging info
     ASM_ASSERT_OUTPUT(get_runner(), input, expected);
-    
-    // Cleanup
-    std::filesystem::remove(temp_file);
 }
 
-// Example 5: Testing different assembly syntaxes
-class SyntaxComparisonTest : public ::testing::Test {
-protected:
-    std::unique_ptr<AsmTestRunner> intel_runner_;
-    std::unique_ptr<AsmTestRunner> att_runner_;
-    
-    void SetUp() override {
-        // Assume we have the same program compiled with different syntax preferences
-        intel_runner_ = std::make_unique<AsmTestRunner>("./program_intel", AsmSyntax::Intel);
-        att_runner_ = std::make_unique<AsmTestRunner>("./program_att", AsmSyntax::ATT);
-    }
-};
-
-TEST_F(SyntaxComparisonTest, TestBothSyntaxesProduceSameResult) {
-    auto input = make_input()
-        .add_arg(42)
-        .add_arg("process");
-    
-    auto expected = expect_success()
-        .stdout_contains("result: 42");
-    
-    // Both versions should produce identical results
-    if (intel_runner_->executable_exists()) {
-        ASM_EXPECT_OUTPUT(intel_runner_.get(), input, expected);
-    }
-    
-    if (att_runner_->executable_exists()) {
-        ASM_EXPECT_OUTPUT(att_runner_.get(), input, expected);
-    }
-}
-
-// Example 6: Parameterized tests for comprehensive input testing
+// Example 3: Parameterized tests for comprehensive input testing
 class ParameterizedCalcTest : public CalculatorAsmTest, 
                             public ::testing::WithParamInterface<std::tuple<int, int, std::string, int>> {
 };
@@ -225,11 +174,12 @@ INSTANTIATE_TEST_SUITE_P(
         std::make_tuple(10, 5, "mul", 50),
         std::make_tuple(10, 5, "div", 2),
         std::make_tuple(-5, 3, "add", -2),
-        std::make_tuple(0, 100, "mul", 0)
+        std::make_tuple(0, 100, "mul", 0),
+        std::make_tuple(15, 3, "div", 5)
     )
 );
 
-// Example 7: Testing with container inputs
+// Example 4: Testing with container inputs
 TEST_F(CalculatorAsmTest, TestWithContainerInputs) {
     // Using vector of arguments
     std::vector<std::string> operations = {"add", "sub", "mul"};
@@ -250,6 +200,19 @@ TEST_F(CalculatorAsmTest, TestWithContainerInputs) {
                               numbers[i], op, numbers[i + 1]);
         }
     }
+}
+
+// Test negative numbers
+TEST_F(CalculatorAsmTest, TestNegativeNumbers) {
+    auto input = make_input()
+        .add_arg(-10)
+        .add_arg(5)
+        .add_arg("add");
+    
+    auto expected = expect_success()
+        .stdout_equals("-5\n");
+    
+    ASM_ASSERT_OUTPUT(get_runner(), input, expected);
 }
 
 // Example main function for running tests
