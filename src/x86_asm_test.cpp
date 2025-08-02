@@ -1,3 +1,8 @@
+/**
+ * @file x86_asm_test.cpp
+ * @brief Implementation of the x86 assembly testing framework
+ */
+
 #include "x86_asm_test.h"
 #include <stdexcept>
 #include <sstream>
@@ -8,11 +13,11 @@
 #include <unistd.h>
 #include <signal.h>
 #include <fcntl.h>
+#include <format>
 
 namespace x86_asm_test {
 
-// ExpectedOutput implementation
-[[nodiscard]] bool ExpectedOutput::matches(const ExecutionResult& result) const noexcept {
+bool ExpectedOutput::matches(const ExecutionResult& result) const noexcept {
     // Check exit code if specified
     if (expected_exit_code_.has_value() && result.exit_code != expected_exit_code_.value()) {
         return false;
@@ -45,44 +50,43 @@ namespace x86_asm_test {
     return true;
 }
 
-[[nodiscard]] std::string ExpectedOutput::get_mismatch_description(const ExecutionResult& result) const {
+std::string ExpectedOutput::get_mismatch_description(const ExecutionResult& result) const {
     std::ostringstream oss;
     
     if (expected_exit_code_.has_value() && result.exit_code != expected_exit_code_.value()) {
-        oss << "Exit code mismatch: expected " << expected_exit_code_.value() 
-            << ", got " << result.exit_code << "\n";
+        oss << std::format("Exit code mismatch: expected {}, got {}\n", 
+                          expected_exit_code_.value(), result.exit_code);
     }
     
     if (exact_stdout_.has_value() && result.stdout_output != exact_stdout_.value()) {
-        oss << "Stdout mismatch:\nExpected: '" << exact_stdout_.value() 
-            << "'\nActual: '" << result.stdout_output << "'\n";
+        oss << std::format("Stdout mismatch:\nExpected: '{}'\nActual: '{}'\n",
+                          exact_stdout_.value(), result.stdout_output);
     }
     
     if (exact_stderr_.has_value() && result.stderr_output != exact_stderr_.value()) {
-        oss << "Stderr mismatch:\nExpected: '" << exact_stderr_.value() 
-            << "'\nActual: '" << result.stderr_output << "'\n";
+        oss << std::format("Stderr mismatch:\nExpected: '{}'\nActual: '{}'\n",
+                          exact_stderr_.value(), result.stderr_output);
     }
     
     // Check for missing patterns in stdout
     for (const auto& pattern : stdout_contains_) {
         if (result.stdout_output.find(pattern) == std::string::npos) {
-            oss << "Stdout missing pattern: '" << pattern 
-                << "'\nActual stdout: '" << result.stdout_output << "'\n";
+            oss << std::format("Stdout missing pattern: '{}'\nActual stdout: '{}'\n",
+                              pattern, result.stdout_output);
         }
     }
     
     // Check for missing patterns in stderr
     for (const auto& pattern : stderr_contains_) {
         if (result.stderr_output.find(pattern) == std::string::npos) {
-            oss << "Stderr missing pattern: '" << pattern 
-                << "'\nActual stderr: '" << result.stderr_output << "'\n";
+            oss << std::format("Stderr missing pattern: '{}'\nActual stderr: '{}'\n",
+                              pattern, result.stderr_output);
         }
     }
     
     return oss.str();
 }
 
-// AsmTestRunner implementation
 AsmTestRunner::AsmTestRunner(
     std::filesystem::path executable_path,
     AsmSyntax syntax,
@@ -93,26 +97,26 @@ AsmTestRunner::AsmTestRunner(
     
     // Validate executable exists and is executable
     if (!std::filesystem::exists(executable_path_)) {
-        std::ostringstream oss;
-        oss << "Executable not found: " << executable_path_.string();
-        throw std::runtime_error(oss.str());
+        throw std::runtime_error(
+            std::format("Executable not found: {}", executable_path_.string())
+        );
     }
     
     if (!std::filesystem::is_regular_file(executable_path_)) {
-        std::ostringstream oss;
-        oss << "Path is not a regular file: " << executable_path_.string();
-        throw std::runtime_error(oss.str());
+        throw std::runtime_error(
+            std::format("Path is not a regular file: {}", executable_path_.string())
+        );
     }
     
     // Check if file is executable (Unix-specific)
     if (access(executable_path_.c_str(), X_OK) != 0) {
-        std::ostringstream oss;
-        oss << "File is not executable: " << executable_path_.string();
-        throw std::runtime_error(oss.str());
+        throw std::runtime_error(
+            std::format("File is not executable: {}", executable_path_.string())
+        );
     }
 }
 
-[[nodiscard]] ExecutionResult AsmTestRunner::execute_process(
+ExecutionResult AsmTestRunner::execute_process(
     std::span<const std::string> args,
     const std::optional<std::string>& stdin_data
 ) const {
@@ -131,12 +135,11 @@ AsmTestRunner::AsmTestRunner(
         throw std::runtime_error("Failed to create pipes");
     }
     
-    // Prepare arguments for execv - need char* array
+    // Prepare arguments for execv
     std::vector<char*> exec_args;
-    exec_args.reserve(args.size() + 2); // +1 for executable, +1 for nullptr
+    exec_args.reserve(args.size() + 2);
     exec_args.push_back(const_cast<char*>(executable_path_.c_str()));
     
-    // Using ranges view to convert span<const string> to char* vector
     for (const auto& arg : args) {
         exec_args.push_back(const_cast<char*>(arg.c_str()));
     }
@@ -145,7 +148,7 @@ AsmTestRunner::AsmTestRunner(
     pid_t pid = fork();
     
     if (pid == -1) {
-        // Fork failed
+        // Fork failed - cleanup pipes
         close(stdout_pipe[0]); close(stdout_pipe[1]);
         close(stderr_pipe[0]); close(stderr_pipe[1]);
         close(stdin_pipe[0]); close(stdin_pipe[1]);
@@ -154,7 +157,6 @@ AsmTestRunner::AsmTestRunner(
     
     if (pid == 0) {
         // Child process
-        // Redirect stdout, stderr, stdin
         dup2(stdout_pipe[1], STDOUT_FILENO);
         dup2(stderr_pipe[1], STDERR_FILENO);
         dup2(stdin_pipe[0], STDIN_FILENO);
@@ -174,11 +176,10 @@ AsmTestRunner::AsmTestRunner(
         
         // Execute the program
         execv(executable_path_.c_str(), exec_args.data());
-        perror("execv"); // This only runs if execv fails
+        perror("execv");
         _exit(127);
     } else {
         // Parent process
-        // Close write end of stdout/stderr pipes and read end of stdin pipe
         close(stdout_pipe[1]);
         close(stderr_pipe[1]);
         close(stdin_pipe[0]);
@@ -188,7 +189,7 @@ AsmTestRunner::AsmTestRunner(
             ssize_t written = write(stdin_pipe[1], stdin_data->c_str(), stdin_data->size());
             (void)written; // Suppress unused variable warning
         }
-        close(stdin_pipe[1]); // Close stdin pipe to signal EOF
+        close(stdin_pipe[1]);
         
         // Set up for non-blocking reads with timeout
         fd_set read_fds;
@@ -220,12 +221,10 @@ AsmTestRunner::AsmTestRunner(
             int select_result = select(max_fd + 1, &read_fds, nullptr, nullptr, &timeout_val);
             
             if (select_result == -1) {
-                // Error in select
                 break;
             } else if (select_result == 0) {
-                // Timeout
                 result.timed_out = true;
-                kill(pid, SIGKILL); // Force kill the process
+                kill(pid, SIGKILL);
                 break;
             }
             
@@ -256,14 +255,14 @@ AsmTestRunner::AsmTestRunner(
         close(stdout_pipe[0]);
         close(stderr_pipe[0]);
         
-        // Wait for child process to complete
+        // Wait for child process
         int status;
         waitpid(pid, &status, 0);
         
         if (WIFEXITED(status)) {
             result.exit_code = WEXITSTATUS(status);
         } else if (WIFSIGNALED(status)) {
-            result.exit_code = 128 + WTERMSIG(status); // Convention for signal deaths
+            result.exit_code = 128 + WTERMSIG(status);
         }
         
         auto end_time = std::chrono::steady_clock::now();
@@ -275,7 +274,7 @@ AsmTestRunner::AsmTestRunner(
     return result;
 }
 
-[[nodiscard]] ExecutionResult AsmTestRunner::execute_with_strace(
+ExecutionResult AsmTestRunner::execute_with_strace(
     std::span<const std::string> args,
     const std::optional<std::string>& stdin_data
 ) const {
@@ -295,11 +294,10 @@ AsmTestRunner::AsmTestRunner(
     // Add original arguments
     strace_args.insert(strace_args.end(), args.begin(), args.end());
     
-    // Use the regular execute_process but with strace command
     ExecutionResult result;
     auto start_time = std::chrono::steady_clock::now();
     
-    // Create pipes similar to execute_process
+    // Create pipes
     int stdout_pipe[2], stderr_pipe[2], stdin_pipe[2];
     
     if (pipe(stdout_pipe) == -1 || pipe(stderr_pipe) == -1 || pipe(stdin_pipe) == -1) {
@@ -325,7 +323,7 @@ AsmTestRunner::AsmTestRunner(
     }
     
     if (pid == 0) {
-        // Child process - similar to execute_process
+        // Child process
         dup2(stdout_pipe[1], STDOUT_FILENO);
         dup2(stderr_pipe[1], STDERR_FILENO);
         dup2(stdin_pipe[0], STDIN_FILENO);
@@ -341,7 +339,7 @@ AsmTestRunner::AsmTestRunner(
             }
         }
         
-        execvp("strace", exec_args.data()); // Use execvp to find strace in PATH
+        execvp("strace", exec_args.data());
         perror("execvp strace");
         _exit(127);
     } else {
@@ -356,7 +354,7 @@ AsmTestRunner::AsmTestRunner(
         }
         close(stdin_pipe[1]);
         
-        // Read output (same as execute_process)
+        // Read output with timeout
         char buffer[4096];
         bool stdout_open = true, stderr_open = true;
         fd_set read_fds;
@@ -430,7 +428,7 @@ AsmTestRunner::AsmTestRunner(
     return result;
 }
 
-[[nodiscard]] ExecutionResult AsmTestRunner::run_test(const TestInput& input) const {
+ExecutionResult AsmTestRunner::run_test(const TestInput& input) const {
     return execute_process(input.args(), input.stdin_data());
 }
 
@@ -439,11 +437,11 @@ void AsmTestRunner::assert_output(const TestInput& input, const ExpectedOutput& 
     
     if (!expected.matches(result)) {
         std::ostringstream error_msg;
-        error_msg << "Assembly test failed for executable: " << executable_path_.string() << "\n"
-                  << "Syntax: " << get_syntax_string() << "\n"
+        error_msg << std::format("Assembly test failed for executable: {}\n", executable_path_.string())
+                  << std::format("Syntax: {}\n", get_syntax_string())
                   << "Arguments: ";
         
-        // Manually join arguments since we can't use ranges::fold_left without C++23
+        // Join arguments
         bool first = true;
         for (const auto& arg : input.args()) {
             if (!first) error_msg << " ";
@@ -451,20 +449,19 @@ void AsmTestRunner::assert_output(const TestInput& input, const ExpectedOutput& 
             first = false;
         }
         
-        error_msg << "\nExecution time: " << result.execution_time.count() << "ms\n"
+        error_msg << std::format("\nExecution time: {}ms\n", result.execution_time.count())
                   << expected.get_mismatch_description(result);
         
-        // Use Google Test's FAIL() macro for proper test reporting
         FAIL() << error_msg.str();
     }
 }
 
-[[nodiscard]] bool AsmTestRunner::executable_exists() const noexcept {
+bool AsmTestRunner::executable_exists() const noexcept {
     return std::filesystem::exists(executable_path_) && 
            std::filesystem::is_regular_file(executable_path_);
 }
 
-[[nodiscard]] std::string AsmTestRunner::get_syntax_string() const noexcept {
+std::string AsmTestRunner::get_syntax_string() const noexcept {
     switch (syntax_) {
         case AsmSyntax::Intel: return "Intel";
         case AsmSyntax::ATT: return "AT&T";

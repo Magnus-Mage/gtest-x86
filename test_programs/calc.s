@@ -1,139 +1,137 @@
-# calc.s - Functional calculator in Intel syntax
+# calc.s - Working calculator in Intel syntax
 .intel_syntax noprefix
 .global _start
 
 .section .text
 _start:
     # Get argc from stack
-    mov rdi, [rsp]      # argc
-    cmp rdi, 4          # Need at least 4 args: program, num1, num2, operation
-    jl error_exit
+    mov rdi, [rsp]      # argc is at [rsp]
+    cmp rdi, 4          # Need 4 args: program, num1, num2, operation
+    jl usage_error
     
-    # Get argv pointers
-    lea rsi, [rsp + 8]  # argv array
-    
-    # Parse first number (argv[1])
-    mov rdi, [rsi + 8]  # argv[1]
+    # Get argv[1] - first number
+    mov rdi, [rsp + 16] # argv[1] 
     call atoi
-    mov r12, rax        # Store first number in r12
+    mov r12, rax        # Save first number
     
-    # Parse second number (argv[2])
-    mov rdi, [rsi + 16] # argv[2]
+    # Get argv[2] - second number  
+    mov rdi, [rsp + 24] # argv[2]
     call atoi
-    mov r13, rax        # Store second number in r13
+    mov r13, rax        # Save second number
     
-    # Get operation string (argv[3])
-    mov rdi, [rsi + 24] # argv[3]
+    # Get argv[3] - operation
+    mov rdi, [rsp + 32] # argv[3]
+    mov al, [rdi]       # First character
     
-    # Check operation type
-    mov al, [rdi]       # First character of operation
     cmp al, 'a'         # add
     je do_add
     cmp al, 's'         # sub
-    je do_sub  
+    je do_sub
     cmp al, 'm'         # mul
-    je do_mul
+    je do_mul  
     cmp al, 'd'         # div
     je do_div
-    jmp error_exit
-    
+    jmp usage_error
+
 do_add:
     mov rax, r12
     add rax, r13
     jmp print_result
-    
+
 do_sub:
     mov rax, r12
     sub rax, r13
     jmp print_result
-    
+
 do_mul:
     mov rax, r12
     imul rax, r13
     jmp print_result
-    
+
 do_div:
     cmp r13, 0
-    je div_by_zero
+    je div_error
     mov rax, r12
-    cqo                 # Sign extend rax to rdx:rax
+    cqo                 # Sign extend
     idiv r13
     jmp print_result
 
-div_by_zero:
+div_error:
     mov rax, 1          # sys_write
     mov rdi, 2          # stderr
-    mov rsi, offset div_error_msg
-    mov rdx, div_error_len
+    lea rsi, [rip + div_msg]
+    mov rdx, div_msg_len
     syscall
-    mov rdi, 1          # Exit with error code 1
+    mov rdi, 1
     jmp exit_program
 
 print_result:
-    # Convert result to string and print
     mov rdi, rax
-    call print_number
+    call print_int
     
     # Print newline
     mov rax, 1          # sys_write
     mov rdi, 1          # stdout
-    mov rsi, offset newline
+    lea rsi, [rip + newline]
     mov rdx, 1
     syscall
     
-    mov rdi, 0          # Success exit code
+    mov rdi, 0          # Success
     jmp exit_program
 
-error_exit:
+usage_error:
     mov rax, 1          # sys_write
     mov rdi, 2          # stderr
-    mov rsi, offset usage_msg
-    mov rdx, usage_len
+    lea rsi, [rip + usage_msg]
+    mov rdx, usage_msg_len
     syscall
-    mov rdi, 1          # Error exit code
+    mov rdi, 1          # Error code
 
 exit_program:
     mov rax, 60         # sys_exit
     syscall
 
-# Simple atoi implementation
+# Convert string to integer
+# Input: rdi = string pointer
+# Output: rax = integer
 atoi:
-    xor rax, rax        # Result = 0
-    xor rdx, rdx        # Sign = positive
-    mov rsi, rdi        # String pointer
+    xor rax, rax        # result = 0
+    xor rcx, rcx        # sign = 0
+    mov rsi, rdi        # string pointer
     
-    # Check for negative sign
+    # Check for minus sign
     cmp byte ptr [rsi], '-'
     jne atoi_loop
-    inc rdx             # Set sign flag
-    inc rsi             # Skip minus sign
+    mov rcx, 1          # negative flag
+    inc rsi             # skip minus
     
 atoi_loop:
-    mov cl, [rsi]       # Get character
-    test cl, cl         # Check for null terminator
+    mov dl, [rsi]       # get character
+    test dl, dl         # check for null
     jz atoi_done
     
-    cmp cl, '0'
+    cmp dl, '0'
     jl atoi_done
-    cmp cl, '9'
+    cmp dl, '9'
     jg atoi_done
     
-    sub cl, '0'         # Convert to digit
-    imul rax, 10        # Result *= 10
-    add rax, rcx        # Result += digit
+    sub dl, '0'         # convert to digit
+    imul rax, 10        # result *= 10
+    movzx rdx, dl       # zero extend
+    add rax, rdx        # result += digit
     inc rsi
     jmp atoi_loop
-    
+
 atoi_done:
-    test rdx, rdx       # Check sign
+    test rcx, rcx       # check sign
     jz atoi_return
-    neg rax             # Make negative
+    neg rax             # make negative
 atoi_return:
     ret
 
-# Print number implementation
-print_number:
-    # Handle negative numbers
+# Print integer
+# Input: rdi = integer to print
+print_int:
     test rdi, rdi
     jns print_positive
     
@@ -141,45 +139,44 @@ print_number:
     push rdi
     mov rax, 1
     mov rdi, 1
-    mov rsi, offset minus_sign
+    lea rsi, [rip + minus_sign]
     mov rdx, 1
     syscall
     pop rdi
     neg rdi
-    
+
 print_positive:
-    # Convert to string (reverse order)
     mov rax, rdi
-    mov rcx, 0          # Digit counter
-    lea rsi, [number_buffer + 19]  # Start at end of buffer
-    mov byte ptr [rsi + 1], 0      # Null terminator
-    
+    lea rsi, [rip + number_buffer + 19]  # End of buffer
+    mov byte ptr [rsi + 1], 0            # Null terminator
+    mov rcx, 0                           # Digit count
+
 convert_loop:
     xor rdx, rdx
     mov rbx, 10
-    div rbx             # rax = rax/10, rdx = rax%10
-    add dl, '0'         # Convert remainder to ASCII
+    div rbx             # rax = rax/10, rdx = remainder
+    add dl, '0'         # Convert to ASCII
     mov [rsi], dl
     dec rsi
     inc rcx
     test rax, rax
     jnz convert_loop
     
-    # Print the string
+    # Print the number
     inc rsi             # Point to first digit
     mov rax, 1          # sys_write
     mov rdi, 1          # stdout
-    mov rdx, rcx        # Length
+    mov rdx, rcx        # length
     syscall
     ret
 
 .section .data
-    newline: .ascii "\n"
-    minus_sign: .ascii "-"
-    div_error_msg: .ascii "Error: division by zero\n"
-    div_error_len = . - div_error_msg
-    usage_msg: .ascii "Usage: calc <num1> <num2> <operation>\nOperations: add, sub, mul, div\n"
-    usage_len = . - usage_msg
+newline:        .ascii "\n"
+minus_sign:     .ascii "-"  
+div_msg:        .ascii "Error: division by zero\n"
+div_msg_len = . - div_msg
+usage_msg:      .ascii "Usage: calc <num1> <num2> <operation>\nOperations: add, sub, mul, div\n"
+usage_msg_len = . - usage_msg
 
 .section .bss
-    number_buffer: .space 21    # Buffer for number string conversion
+number_buffer:  .space 21

@@ -38,82 +38,72 @@ jobs:
           if [ ! -d "googletest" ]; then
             git clone https://github.com/google/googletest.git
             cd googletest
-            git checkout v1.14.0  # Use stable version
+            git checkout v1.14.0
           fi
 
       - name: Configure CMake
         run: |
           mkdir -p build
           cd build
-          cmake .. \
-            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
-            -DCMAKE_CXX_COMPILER=g++-13 \
-            -DCMAKE_C_COMPILER=gcc-13 \
-            -DCMAKE_CXX_STANDARD=20
+          cmake .. -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
 
       - name: Build Framework
         run: |
           cd build
           make -j$(nproc)
 
-      - name: Test Assembly Programs Manually
+      - name: Test Assembly Programs
         run: |
           cd build
           echo "Testing calculator program:"
-          ./calc 10 5 add || echo "calc program may need fixes"
-          ./calc 10 5 sub || echo "calc program may need fixes"
-          ./calc 7 8 mul || echo "calc program may need fixes"
+          ./calc 10 5 add || echo "calc program needs fixes"
+          ./calc 10 5 sub || echo "calc program needs fixes"
+          ./calc 7 8 mul || echo "calc program needs fixes"
           
           echo "Testing string processor:"
-          echo "hello world" | ./string_processor || echo "string_processor may need fixes"
+          echo "hello world" | ./string_processor || echo "string_processor needs fixes"
 
       - name: Run Framework Tests
         run: |
           cd build
           ./asm_test_examples
 
-      - name: Generate Documentation (Release only)
+      - name: Generate Documentation
         if: matrix.build_type == 'Release'
         run: |
           cd build
-          if command -v doxygen &> /dev/null; then
-            make docs || echo "Documentation generation failed"
+          if command -v doxygen &> /dev/null && [ -f Makefile ]; then
+            make docs 2>/dev/null || echo "Documentation generation skipped"
           fi
 
-      - name: Upload Documentation Artifact
+      - name: Upload Documentation
         if: matrix.build_type == 'Release'
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: documentation
           path: build/docs/html/
           if-no-files-found: ignore
 
-      - name: Test Coverage (Debug only)
+      - name: Test Coverage
         if: matrix.build_type == 'Debug'
         run: |
           sudo apt-get install -y lcov
           cd build
-          # Add coverage flags and regenerate
           cmake .. -DCMAKE_BUILD_TYPE=Debug \
-                   -DCMAKE_CXX_COMPILER=g++-13 \
-                   -DCMAKE_C_COMPILER=gcc-13 \
-                   -DCMAKE_CXX_STANDARD=20 \
                    -DCMAKE_CXX_FLAGS="--coverage" \
                    -DCMAKE_EXE_LINKER_FLAGS="--coverage"
           make -j$(nproc)
           
-          # Run tests with coverage
           ./asm_test_examples || true
           
-          # Generate coverage report
-          lcov --capture --directory . --output-file coverage.info || true
-          lcov --remove coverage.info '/usr/*' --output-file coverage.info || true
-          lcov --remove coverage.info '*/googletest/*' --output-file coverage.info || true
-          lcov --list coverage.info || true
+          lcov --capture --directory . --output-file coverage.info 2>/dev/null || true
+          lcov --remove coverage.info '/usr/*' --output-file coverage.info 2>/dev/null || true
+          lcov --remove coverage.info '*/googletest/*' --output-file coverage.info 2>/dev/null || true
+          lcov --list coverage.info 2>/dev/null || true
 
       - name: Upload Coverage Report
         if: matrix.build_type == 'Debug'
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: coverage-report
           path: build/coverage.info
@@ -154,20 +144,16 @@ jobs:
                    --error-exitcode=1 \
                    -I src \
                    -I googletest/googletest/include \
-                   src/ || echo "cppcheck found issues"
+                   src/ || echo "cppcheck found issues (non-blocking)"
 
       - name: Run clang-tidy
         run: |
-          # Create compile_commands.json
           mkdir -p build
           cd build
-          cmake .. -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
-                   -DCMAKE_CXX_COMPILER=g++-13 \
-                   -DCMAKE_CXX_STANDARD=20
+          cmake .. -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
           
-          # Run clang-tidy
           cd ..
           clang-tidy src/x86_asm_test.cpp \
                      -p build \
                      --checks=-*,readability-*,performance-*,modernize-* \
-                     || echo "clang-tidy found issues"
+                     || echo "clang-tidy found issues (non-blocking)"
